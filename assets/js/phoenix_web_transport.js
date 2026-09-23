@@ -151,12 +151,14 @@ export default class WebTransportTransport {
   finish(info){
     if(this.readyState === CLOSED){ return }
     this.readyState = CLOSED
+    console.info("[phoenix_web_transport] session closed:", info && info.closeCode, info && info.reason)
     this.onclose({code: info && info.closeCode, reason: info && info.reason, wasClean: true})
   }
 
   fail(error){
     if(this.readyState === CLOSED){ return }
     this.readyState = CLOSED
+    console.warn("[phoenix_web_transport] session failed:", error && (error.message || error), this.url)
     this.onerror(error)
     this.onclose({code: 1006, reason: String(error), wasClean: false})
   }

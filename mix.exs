@@ -36,6 +36,9 @@ defmodule PhoenixWebTransport.MixProject do
       # compiled with the COWBOY_QUICER macro; see scripts/build_quic.sh.
       {:cowboy, "~> 2.19"},
       {:quicer, "~> 0.4.8"},
+      # Pure Erlang QUIC + HTTP/3 (extended CONNECT, datagrams, stream priority).
+      # Alternative session layer to cowboy+quicer; see PhoenixWebTransport.Quic.
+      {:quic, github: "benoitc/erlang_quic", branch: "main"},
       {:jason, "~> 1.4", only: [:dev, :test]},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]

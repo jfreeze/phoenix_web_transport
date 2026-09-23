@@ -89,6 +89,13 @@ shortest-remaining-first idea applied at the diff layer.
 - cowboy 2.19 ships experimental HTTP/3 and WebTransport (drafts 07 to 13)
   when compiled with the `COWBOY_QUICER` macro, on top of emqx's `quicer`
   NIF around msquic.
+- benoitc/erlang_quic is a pure Erlang QUIC and HTTP/3 stack with extended
+  CONNECT, HTTP datagrams, hooks to claim the WebTransport stream types,
+  and an RFC 9218 urgency queue in its send path. `PhoenixWebTransport.Quic`
+  builds the WebTransport session on it in about 300 lines and needs no
+  native code. Chrome connects to it (2026-09-23). Its only interop
+  wrinkle so far: it binds IPv4 by default, and browsers resolve
+  `localhost` to `::1` first, so the listener asks for a dual-stack socket.
 
 Two things are not extension points and are handled with workarounds:
 

@@ -16,13 +16,21 @@ defmodule WtDemo.Application do
       # Start to serve requests, typically the last entry
       WtDemoWeb.Endpoint,
       # WebTransport (HTTP/3) listener for the same LiveView socket, beside the endpoint.
-      {PhoenixWebTransport.Listener, Application.get_env(:wt_demo, PhoenixWebTransport, [])}
+      {wt_listener(), Application.get_env(:wt_demo, PhoenixWebTransport, [])}
     ]
 
     # See https://elixir.hexdocs.pm/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: WtDemo.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  # WT_BACKEND=quic swaps the cowboy+quicer session layer for erlang_quic.
+  defp wt_listener do
+    case System.get_env("WT_BACKEND", "cowboy") do
+      "quic" -> PhoenixWebTransport.Quic.Listener
+      _ -> PhoenixWebTransport.Listener
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration

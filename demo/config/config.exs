@@ -33,6 +33,8 @@ config :wt_demo, PhoenixWebTransport,
   path: "/live",
   port: String.to_integer(System.get_env("WT_PORT") || "4433"),
   cert_dir: "priv/cert",
+  # Override the URL pages connect to, e.g. WT_URL=https://127.0.0.1:4433/live
+  url: System.get_env("WT_URL"),
   check_origin:
     Enum.map(["localhost", "127.0.0.1"], &"http://#{&1}:#{System.get_env("PORT") || "4000"}"),
   max_lanes: 16,

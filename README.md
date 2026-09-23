@@ -59,16 +59,23 @@ stays on lane 0. Full design, edge cases and measurements are in
 
 Your Phoenix endpoint keeps running on **Bandit** (or cowboy) exactly as it
 does today, for HTTP and the WebSocket fallback. The QUIC listener is a
-separate OTP child, because no Elixir server speaks QUIC: Bandit and
-Thousand Island are TCP only, and the only QUIC stack on the BEAM is
-[quicer](https://github.com/emqx/quic) (msquic). cowboy 2.19 has an
-experimental HTTP/3 and WebTransport layer on top of it, and that is what
-the listener uses. A cowboy-free connection loop on quicer plus cowlib's
-HTTP/3 machine is on the roadmap.
+separate OTP child, because Bandit and Thousand Island are TCP only. Two
+session layers are included; both drive the same handler, serializer and
+browser class.
 
-- Elixir 1.15+, OTP 26+
-- `cmake` and OpenSSL 3 (`brew install cmake openssl@3` on macOS) to build the msquic NIF
-- cowboy compiled with the `COWBOY_QUICER` macro: `mix deps.quic` does it (see `scripts/build_quic.sh`)
+| Backend | Module | Stack | Native build | Status |
+|---|---|---|---|---|
+| `erlang_quic` | `PhoenixWebTransport.Quic.Listener` | [benoitc/erlang_quic](https://github.com/benoitc/erlang_quic), pure Erlang QUIC + HTTP/3 with extended CONNECT, datagrams and RFC 9218 stream priority in its send path | none | Chrome 153 connects end to end; verified 2026-09-23 |
+| cowboy | `PhoenixWebTransport.Listener` | cowboy 2.19's experimental HTTP/3 + WebTransport on [quicer](https://github.com/emqx/quic) (msquic) | cmake, OpenSSL 3, and cowboy recompiled with `COWBOY_QUICER` | Chrome 153 connects end to end; the original prototype |
+
+The erlang_quic backend needs nothing beyond `mix deps.get`. The cowboy
+backend needs `brew install cmake openssl@3` and `mix deps.quic` (see
+`scripts/build_quic.sh`). Elixir 1.15+, OTP 26+ for both.
+
+Prior art worth knowing: [bugnano/wtransport-elixir](https://github.com/bugnano/wtransport-elixir)
+(Rustler bindings to the Rust `wtransport` crate, server side, Thousand
+Island-shaped API). Thanks to mat-hek on the Elixir Forum for pointing at
+erlang_quic.
 
 ## Usage
 
@@ -76,7 +83,7 @@ HTTP/3 machine is on the roadmap.
 # mix.exs
 {:phoenix_web_transport, github: "jfreeze/phoenix_web_transport"}
 
-# application.ex, after your endpoint
+# application.ex, after your endpoint (PhoenixWebTransport.Quic.Listener for erlang_quic)
 {PhoenixWebTransport.Listener,
  endpoint: MyAppWeb.Endpoint,
  socket: Phoenix.LiveView.Socket,
@@ -101,7 +108,8 @@ WebTransportTransport.certHash = document.querySelector("meta[name='wt-cert-hash
 const liveSocket = new LiveSocket(wtUrl, Socket, {transport: WebTransportTransport, params: {...}})
 ```
 
-Then run `mix deps.quic` once after `mix deps.get`.
+For the cowboy backend, run `mix deps.quic` once after `mix deps.get`.
+The erlang_quic backend binds dual-stack and needs no extra step.
 
 ## Demo and test harness
 
@@ -113,6 +121,7 @@ becomes the bottleneck.
 ```sh
 brew install cmake openssl@3
 cd demo && mix setup && mix phx.server     # first run builds msquic, several minutes
+WT_BACKEND=quic mix phx.server             # erlang_quic backend instead of cowboy
 open http://localhost:4000
 sudo ../scripts/impair.sh on               # 20 Mbit/s, 20 ms; sudo ../scripts/impair.sh off
 ```
@@ -129,9 +138,12 @@ Done and verified locally:
   and sends events through the lane serializer and handler.
 - Per-component streams: a two-component page shows lane 0 (join), lane 1
   (small component, KBs), lane 2 (large component, MBs).
-- Stream priority set per frame, either by peeking at the quicer handle
-  (default, unpatched cowboy) or through a new cowboy command
+- Stream priority set per frame: on erlang_quic through its RFC 9218
+  urgency API, on cowboy either by peeking at the quicer handle (default,
+  unpatched cowboy) or through a new cowboy command
   (`patches/0001-cowboy-webtransport-set-stream-priority.patch`, verified).
+- Two session layers, erlang_quic (pure Erlang) and cowboy+quicer, behind
+  the same handler and browser class.
 - A vanished peer ends the session promptly instead of buffering forever.
 - Unit tests for the split rule and framing; LiveView tests for the demo.
 
@@ -151,7 +163,9 @@ Not done:
 - **Cross-lane ordering**: events pushed alongside a component delta may
   fire before the delta lands. Fix: a per-diff sequence number.
 - **Endpoint integration** (`socket "/live", ..., webtransport: [...]`).
-- **A cowboy-free QUIC connection loop**, for Bandit shops.
+- **Making cowboy and quicer optional dependencies** now that the
+  erlang_quic backend exists; the cowboy handler still references
+  `cowboy_webtransport` at compile time.
 - **Hosting**: needs a direct UDP path with a public cert. Cloudflare
   Tunnel and the Cloudflare edge do not carry WebTransport.
 
