@@ -169,8 +169,12 @@ Not done:
 - **Endpoint integration** (`socket "/live", ..., webtransport: [...]`).
 - **Deciding whether to keep the cowboy backend at all.** It is now
   optional and only a second implementation of the same session protocol.
-- **Hosting**: needs a direct UDP path with a public cert. Cloudflare
-  Tunnel and the Cloudflare edge do not carry WebTransport.
+- **Hosting**: needs a UDP path from the browser to the BEAM with a public
+  cert. Cloudflare Tunnel and Cloudflare's HTTP edge do not carry
+  WebTransport. Cloudflare Spectrum (Enterprise, paid add-on) forwards raw
+  UDP and should pass QUIC through to the origin untouched, but that is
+  unverified here. A plain VPS, a port forward, or any host with a public
+  UDP port works.
 
 ## Upstream
 

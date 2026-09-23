@@ -126,9 +126,10 @@ No change to `phoenix_live_view` is required for the split, because
   to the endpoint's `check_origin` config.
 - **Certificates.** Dev uses a pinned 13-day cert. Production needs a public
   cert on the QUIC port, and UDP 443 (or an alternate port advertised via
-  `Alt-Svc`) open through Cloudflare or whatever fronts the app. Cloudflare
-  tunnels do not carry WebTransport today; this needs a direct path or a
-  QUIC-aware edge.
+  `Alt-Svc`) reachable from the browser. Cloudflare Tunnel and Cloudflare's
+  HTTP edge do not carry WebTransport; Spectrum (Enterprise) forwards raw
+  UDP and should pass QUIC through, unverified. Otherwise a direct path or
+  a QUIC-aware edge.
 - **Fallback.** Safari support is recent and `serverCertificateHashes` is
   Chromium-only, so the client must fall back to WebSocket. The demo does
   this when `WebTransport` is absent; a real client should also fall back on
