@@ -1,0 +1,80 @@
+From: Jim Freeze <jim@freeze.org>
+Subject: [PATCH] WebTransport: add a set_stream_priority command
+
+Handlers that multiplex application messages over several WebTransport
+streams need to influence which stream's bytes go out first. msquic
+schedules streams of equal priority FIFO, so without this a small message
+queued after a large one on another stream still waits.
+
+Adds {set_stream_priority, StreamID, Priority} to the WebTransport
+command set, mapped to QUIC_PARAM_STREAM_PRIORITY (0..65535, default
+0x7FFF, higher is scheduled first). Until this lands, a handler has to
+read the quicer stream handle out of the connection process dictionary.
+
+Against cowboy 2.19.0.
+---
+diff -ruN a/src/cowboy_http3.erl b/src/cowboy_http3.erl
+--- a/src/cowboy_http3.erl	2026-09-23 09:53:09
++++ b/src/cowboy_http3.erl	2026-09-23 09:53:09
+@@ -1006,6 +1006,13 @@
+ 			wt_commands(State, Session, Tail)
+ 		%% @todo Handle errors.
+ 	end;
++wt_commands(State=#state{conn=Conn}, Session, [{set_stream_priority, StreamID, Priority}|Tail]) ->
++	%% @todo Check that StreamID belongs to Session.
++	case cowboy_quicer:set_stream_priority(Conn, StreamID, Priority) of
++		ok ->
++			wt_commands(State, Session, Tail)
++		%% @todo Handle errors.
++	end;
+ wt_commands(State=#state{conn=Conn}, Session=#stream{id=SessionID}, [initiate_close|Tail]) ->
+ 	%% We must send a WT_DRAIN_SESSION capsule on the CONNECT stream.
+ 	Capsule = cow_capsule:wt_drain_session(),
+diff -ruN a/src/cowboy_quicer.erl b/src/cowboy_quicer.erl
+--- a/src/cowboy_quicer.erl	2026-09-23 09:53:09
++++ b/src/cowboy_quicer.erl	2026-09-23 09:53:09
+@@ -28,6 +28,7 @@
+ -export([start_bidi_stream/2]).
+ -export([start_unidi_stream/2]).
+ -export([setopt/4]).
++-export([set_stream_priority/3]).
+ -export([send/3]).
+ -export([send/4]).
+ -export([send_datagram/2]).
+@@ -117,6 +118,15 @@
+ setopt(_Conn, StreamID, active, Value) ->
+ 	StreamRef = get({quicer_stream, StreamID}),
+ 	quicer:setopt(StreamRef, active, Value).
++
++%% Priority is QUIC_PARAM_STREAM_PRIORITY: 0..65535, default 16#7FFF,
++%% higher values are scheduled first.
++-spec set_stream_priority(quicer_connection_handle(), cow_http3:stream_id(), 0..65535)
++	-> ok | {error, any()}.
++
++set_stream_priority(_Conn, StreamID, Priority) ->
++	StreamRef = get({quicer_stream, StreamID}),
++	quicer:setopt(StreamRef, priority, Priority).
+ 
+ -spec send(quicer_connection_handle(), cow_http3:stream_id(), iodata())
+ 	-> ok | {error, any()}.
+diff -ruN a/src/cowboy_webtransport.erl b/src/cowboy_webtransport.erl
+--- a/src/cowboy_webtransport.erl	2026-09-23 09:53:09
++++ b/src/cowboy_webtransport.erl	2026-09-23 09:53:09
+@@ -58,6 +58,7 @@
+ 	{open_stream, open_stream_ref(), stream_type(), iodata()} |
+ 	{close_stream, cow_http3:stream_id(), cow_http3:wt_app_error_code()} |
+ 	{send, cow_http3:stream_id() | datagram, iodata()} |
++	{set_stream_priority, cow_http3:stream_id(), 0..65535} |
+ 	initiate_close |
+ 	close |
+ 	{close, cow_http3:wt_app_error_code()} |
+@@ -240,6 +241,9 @@
+ 	commands(Tail, State, Res, [Command|Acc]);
+ %% {send, StreamID, IsFin, Data}.
+ commands([Command={send, _, _, _}|Tail], State, Res, Acc) ->
++	commands(Tail, State, Res, [Command|Acc]);
++%% {set_stream_priority, StreamID, Priority}.
++commands([Command={set_stream_priority, _, _}|Tail], State, Res, Acc) ->
+ 	commands(Tail, State, Res, [Command|Acc]);
+ %% initiate_close - DRAIN_WT_SESSION
+ commands([Command=initiate_close|Tail], State, Res, Acc) ->

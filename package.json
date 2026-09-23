@@ -1,0 +1,13 @@
+{
+  "name": "phoenix_web_transport",
+  "version": "0.1.0",
+  "description": "WebTransport transport class for phoenix.js and Phoenix LiveView",
+  "license": "MIT",
+  "main": "./assets/js/phoenix_web_transport.js",
+  "module": "./assets/js/phoenix_web_transport.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/jfreeze/phoenix_web_transport.git"
+  },
+  "files": ["assets/js/phoenix_web_transport.js"]
+}
