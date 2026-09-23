@@ -160,6 +160,9 @@ Not done:
 - `patches/0001-cowboy-webtransport-set-stream-priority.patch`: adds a
   `{set_stream_priority, StreamID, Prio}` WebTransport command to cowboy
   2.19, so handlers stop reading the connection process dictionary.
+  Submitted upstream as [ninenines/cowboy#1725](https://github.com/ninenines/cowboy/pull/1725)
+  (ticket [#1724](https://github.com/ninenines/cowboy/issues/1724)), with a
+  test case; cowboy's WebTransport suite passes 21/21 with it.
 - Proposal for cowboy: compile the HTTP/3 modules whenever `quicer` is a
   dependency, instead of requiring the `COWBOY_QUICER` macro. Mix cannot
   pass `erl_opts` to a rebar3 dependency, so today every Elixir user needs
