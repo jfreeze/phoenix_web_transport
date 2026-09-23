@@ -76,6 +76,7 @@ defmodule PhoenixWebTransport.Quic.Session do
     state = %{state | h3: h3}
 
     with :ok <- check_protocol(headers),
+         :ok <- check_path(path, state.opts[:path]),
          :ok <- check_origin(headers, state.opts[:socket_opts]),
          {:ok, socket_state} <- connect(state, path, headers) do
       :ok = :quic_h3.send_response(h3, sid, 200, [])
@@ -164,6 +165,13 @@ defmodule PhoenixWebTransport.Quic.Session do
       nil -> :ok
       other -> {:error, 400, {:protocol, other}}
     end
+  end
+
+  # Only the configured socket mount point (e.g. "/live/...") is a session.
+  defp check_path(path, mount) do
+    if String.starts_with?(path, mount <> "/") or String.starts_with?(path, mount <> "?"),
+      do: :ok,
+      else: {:error, 404, {:path, path}}
   end
 
   defp check_origin(headers, socket_opts) do

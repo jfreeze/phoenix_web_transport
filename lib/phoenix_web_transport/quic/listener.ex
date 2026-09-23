@@ -37,7 +37,7 @@ defmodule PhoenixWebTransport.Quic.Listener do
   def init(opts) do
     port = Keyword.get(opts, :port, @default_port)
     {certfile, keyfile} = cert_paths(opts)
-    {cert_der, key} = load_cert_and_key(certfile, keyfile)
+    {cert_der, chain, key} = load_cert_and_key(certfile, keyfile)
     session_opts = Session.options(opts)
 
     server_opts = %{
@@ -46,7 +46,7 @@ defmodule PhoenixWebTransport.Quic.Listener do
       alpn: ["h3"],
       # Dual-stack: browsers resolve localhost to ::1 first. quic_h3 forwards
       # only `quic_opts` to the QUIC listener.
-      quic_opts: %{extra_socket_opts: [:inet6, {:ipv6_v6only, false}]},
+      quic_opts: %{extra_socket_opts: [:inet6, {:ipv6_v6only, false}], cert_chain: chain},
       settings: %{
         @enable_webtransport_legacy => 1,
         @wt_max_sessions => 100,
@@ -101,9 +101,12 @@ defmodule PhoenixWebTransport.Quic.Listener do
     end
   end
 
+  # A PEM with several certificates (e.g. Let's Encrypt fullchain.pem) is
+  # served as leaf plus chain.
   defp load_cert_and_key(certfile, keyfile) do
-    [{:Certificate, cert_der, :not_encrypted}] =
-      certfile |> File.read!() |> :public_key.pem_decode()
+    [cert_der | chain] =
+      for {:Certificate, der, :not_encrypted} <- :public_key.pem_decode(File.read!(certfile)),
+          do: der
 
     key =
       case keyfile |> File.read!() |> :public_key.pem_decode() do
@@ -112,6 +115,6 @@ defmodule PhoenixWebTransport.Quic.Listener do
         [{:RSAPrivateKey, der, :not_encrypted}] -> :public_key.der_decode(:RSAPrivateKey, der)
       end
 
-    {cert_der, key}
+    {cert_der, chain, key}
   end
 end
