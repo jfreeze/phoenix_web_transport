@@ -6,15 +6,19 @@ two and says in words which is ahead and why. See the root README for the
 library and `../docs/SPEC.md` for the design.
 
 ```sh
-brew install cmake openssl@3
-mix setup            # deps, msquic NIF (slow the first time), cowboy with QUIC, assets
+mix setup            # deps and assets; erlang_quic needs no native build
 mix phx.server
 open http://localhost:4000
 ```
 
 Ports: `PORT` (HTTP, default 4000) and `WT_PORT` (UDP, default 4433).
-`WT_PRIORITY=command` uses the cowboy command from `../patches` instead of
-peeking at the quicer handle; apply the patch to `../deps/cowboy` first.
+`WT_URL` overrides the URL pages connect to.
+
+The cowboy + msquic backend is optional: `brew install cmake openssl@3`,
+`mix deps.quic` (builds msquic, slow the first time), then
+`WT_BACKEND=cowboy mix phx.server`. `WT_PRIORITY=command` uses the cowboy
+command from `../patches` instead of peeking at the quicer handle; apply the
+patch to `../deps/cowboy` first.
 
 Loopback is too fast to show a difference. To make the network the
 bottleneck:

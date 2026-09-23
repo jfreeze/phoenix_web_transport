@@ -14,7 +14,8 @@ defmodule PhoenixWebTransport.MixProject do
       aliases: aliases(),
       description:
         "WebTransport (HTTP/3, QUIC) transport for Phoenix sockets and LiveView: " <>
-          "one QUIC stream per component, shortest-message-first scheduling.",
+          "one QUIC stream per component, shortest-message-first scheduling. " <>
+          "Pure Erlang by default (erlang_quic); cowboy+msquic optional.",
       package: package(),
       docs: [main: "readme", extras: ["README.md", "docs/SPEC.md"]],
       source_url: @source_url
@@ -32,13 +33,13 @@ defmodule PhoenixWebTransport.MixProject do
   defp deps do
     [
       {:phoenix, "~> 1.7"},
-      # cowboy provides the HTTP/3 + WebTransport session layer. It must be
-      # compiled with the COWBOY_QUICER macro; see scripts/build_quic.sh.
-      {:cowboy, "~> 2.19"},
-      {:quicer, "~> 0.4.8"},
-      # Pure Erlang QUIC + HTTP/3 (extended CONNECT, datagrams, stream priority).
-      # Alternative session layer to cowboy+quicer; see PhoenixWebTransport.Quic.
+      # Default backend: pure Erlang QUIC + HTTP/3 (extended CONNECT, datagrams,
+      # RFC 9218 stream priority). No native build.
       {:quic, github: "benoitc/erlang_quic", branch: "main"},
+      # Optional backend: cowboy's experimental HTTP/3 + WebTransport on the
+      # msquic NIF. Needs cmake, OpenSSL 3 and `mix deps.quic` (COWBOY_QUICER).
+      {:cowboy, "~> 2.19", optional: true},
+      {:quicer, "~> 0.4.8", optional: true},
       {:jason, "~> 1.4", only: [:dev, :test]},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]

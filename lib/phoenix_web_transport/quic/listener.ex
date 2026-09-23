@@ -9,7 +9,10 @@ defmodule PhoenixWebTransport.Quic.Listener do
   This module is that library for one Phoenix socket: it starts the HTTP/3
   server and spawns a `PhoenixWebTransport.Quic.Session` per connection.
 
-  Same options as `PhoenixWebTransport.Listener`.
+  Options: `:endpoint`, `:socket` (required); `:path` (default `"/live"`),
+  `:port` (default 4433), `:cert_dir` or `:certfile`/`:keyfile`,
+  `:check_origin` (list or `false`), `:max_lanes` (default 16), `:url`
+  (what pages connect to), `:enabled` (`false` skips the listener).
   """
 
   use GenServer
@@ -68,14 +71,14 @@ defmodule PhoenixWebTransport.Quic.Listener do
     end
 
     {:ok, server} = :quic_h3.start_server(__MODULE__, port, server_opts)
-    :persistent_term.put({PhoenixWebTransport.Listener, :opts}, opts)
+    PhoenixWebTransport.register(opts)
     Logger.info("WebTransport (erlang_quic) listener on udp://0.0.0.0:#{port} (cert #{certfile})")
     {:ok, %{server: server}}
   end
 
   @impl true
   def terminate(_reason, _state) do
-    :persistent_term.erase({PhoenixWebTransport.Listener, :opts})
+    PhoenixWebTransport.unregister()
     :quic_h3.stop_server(__MODULE__)
     :ok
   end

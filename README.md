@@ -43,8 +43,10 @@ browser                                     server
 | Piece | File | Role |
 |---|---|---|
 | `PhoenixWebTransport.LaneSerializer` | `lib/phoenix_web_transport/lane_serializer.ex` | A `Phoenix.Socket.Serializer` that splits one `diff` push into per-component frames. **This is the idea.** |
-| `PhoenixWebTransport.Handler` | `lib/phoenix_web_transport/handler.ex` | `cowboy_webtransport` handler that drives a `Phoenix.Socket.Transport` (e.g. `Phoenix.LiveView.Socket`), maps lanes to QUIC streams, sets stream priority by frame size |
-| `PhoenixWebTransport.Listener` | `lib/phoenix_web_transport/listener.ex` | Starts a cowboy HTTP/3 listener on a UDP port beside your existing endpoint |
+| `PhoenixWebTransport.Quic.Session` | `lib/phoenix_web_transport/quic/session.ex` | WebTransport session on erlang_quic that drives a `Phoenix.Socket.Transport` (e.g. `Phoenix.LiveView.Socket`), maps lanes to QUIC streams, sets RFC 9218 urgency by frame size |
+| `PhoenixWebTransport.Quic.Listener` | `lib/phoenix_web_transport/quic/listener.ex` | Starts the erlang_quic HTTP/3 server on a UDP port beside your existing endpoint |
+| `PhoenixWebTransport.Lanes` | `lib/phoenix_web_transport/lanes.ex` | Lane routing and the two priority scales, shared by both backends |
+| `PhoenixWebTransport.Cowboy.*` | `lib/phoenix_web_transport/cowboy/` | The optional cowboy + msquic backend, compiled only when cowboy is a dependency |
 | `PhoenixWebTransport.Frame` | `lib/phoenix_web_transport/frame.ex` | Length-prefixed framing on streams |
 | `PhoenixWebTransport.Cert` | `lib/phoenix_web_transport/cert.ex` | 13-day ECDSA P-256 dev cert for Chrome's `serverCertificateHashes` |
 | `WebTransportTransport` | `assets/js/phoenix_web_transport.js` | WebSocket-shaped class handed to `LiveSocket` via the `transport` option |
@@ -65,12 +67,14 @@ browser class.
 
 | Backend | Module | Stack | Native build | Status |
 |---|---|---|---|---|
-| `erlang_quic` | `PhoenixWebTransport.Quic.Listener` | [benoitc/erlang_quic](https://github.com/benoitc/erlang_quic), pure Erlang QUIC + HTTP/3 with extended CONNECT, datagrams and RFC 9218 stream priority in its send path | none | Chrome 153 connects end to end; verified 2026-09-23 |
-| cowboy | `PhoenixWebTransport.Listener` | cowboy 2.19's experimental HTTP/3 + WebTransport on [quicer](https://github.com/emqx/quic) (msquic) | cmake, OpenSSL 3, and cowboy recompiled with `COWBOY_QUICER` | Chrome 153 connects end to end; the original prototype |
+| erlang_quic (default) | `PhoenixWebTransport.Quic.Listener` | [benoitc/erlang_quic](https://github.com/benoitc/erlang_quic), pure Erlang QUIC + HTTP/3 with extended CONNECT, datagrams and RFC 9218 stream priority in its send path | none | Chrome 153 connects end to end; verified 2026-09-23 |
+| cowboy (optional) | `PhoenixWebTransport.Cowboy.Listener` | cowboy 2.19's experimental HTTP/3 + WebTransport on [quicer](https://github.com/emqx/quic) (msquic) | cmake, OpenSSL 3, and cowboy recompiled with `COWBOY_QUICER` | Chrome 153 connects end to end; the original prototype |
 
-The erlang_quic backend needs nothing beyond `mix deps.get`. The cowboy
-backend needs `brew install cmake openssl@3` and `mix deps.quic` (see
-`scripts/build_quic.sh`). Elixir 1.15+, OTP 26+ for both.
+The default needs nothing beyond `mix deps.get`. `cowboy` and `quicer` are
+optional dependencies: add them to your own `mix.exs`, run `mix deps.quic`
+(see `scripts/build_quic.sh`) and use the cowboy listener instead. The
+cowboy modules are compiled only when cowboy is present. Elixir 1.15+,
+OTP 26+ for both.
 
 Prior art worth knowing: [bugnano/wtransport-elixir](https://github.com/bugnano/wtransport-elixir)
 (Rustler bindings to the Rust `wtransport` crate, server side, Thousand
@@ -83,8 +87,8 @@ erlang_quic.
 # mix.exs
 {:phoenix_web_transport, github: "jfreeze/phoenix_web_transport"}
 
-# application.ex, after your endpoint (PhoenixWebTransport.Quic.Listener for erlang_quic)
-{PhoenixWebTransport.Listener,
+# application.ex, after your endpoint (PhoenixWebTransport.Cowboy.Listener for cowboy)
+{PhoenixWebTransport.Quic.Listener,
  endpoint: MyAppWeb.Endpoint,
  socket: Phoenix.LiveView.Socket,
  path: "/live",
@@ -97,8 +101,8 @@ erlang_quic.
 
 ```html
 <!-- root layout -->
-<meta name="wt-url" content={PhoenixWebTransport.Listener.url()} />
-<meta name="wt-cert-hash" content={PhoenixWebTransport.Listener.cert_hash()} />  <!-- dev only -->
+<meta name="wt-url" content={PhoenixWebTransport.url()} />
+<meta name="wt-cert-hash" content={PhoenixWebTransport.cert_hash()} />  <!-- dev only -->
 ```
 
 ```js
@@ -108,8 +112,8 @@ WebTransportTransport.certHash = document.querySelector("meta[name='wt-cert-hash
 const liveSocket = new LiveSocket(wtUrl, Socket, {transport: WebTransportTransport, params: {...}})
 ```
 
-For the cowboy backend, run `mix deps.quic` once after `mix deps.get`.
-The erlang_quic backend binds dual-stack and needs no extra step.
+No further step for the default backend; it binds dual-stack. For the
+cowboy backend, run `mix deps.quic` once after `mix deps.get`.
 
 ## Demo and test harness
 
@@ -120,9 +124,9 @@ becomes the bottleneck.
 
 ```sh
 brew install cmake openssl@3
-cd demo && mix setup && mix phx.server     # first run builds msquic, several minutes
-WT_BACKEND=quic mix phx.server             # erlang_quic backend instead of cowboy
+cd demo && mix setup && mix phx.server     # erlang_quic, no native build
 open http://localhost:4000
+mix deps.quic && WT_BACKEND=cowboy mix phx.server   # cowboy backend (builds msquic, slow)
 sudo ../scripts/impair.sh on               # 20 Mbit/s, 20 ms; sudo ../scripts/impair.sh off
 ```
 
@@ -163,9 +167,8 @@ Not done:
 - **Cross-lane ordering**: events pushed alongside a component delta may
   fire before the delta lands. Fix: a per-diff sequence number.
 - **Endpoint integration** (`socket "/live", ..., webtransport: [...]`).
-- **Making cowboy and quicer optional dependencies** now that the
-  erlang_quic backend exists; the cowboy handler still references
-  `cowboy_webtransport` at compile time.
+- **Deciding whether to keep the cowboy backend at all.** It is now
+  optional and only a second implementation of the same session protocol.
 - **Hosting**: needs a direct UDP path with a public cert. Cloudflare
   Tunnel and the Cloudflare edge do not carry WebTransport.
 
@@ -188,7 +191,7 @@ Not done:
 ## Layout
 
 ```
-lib/phoenix_web_transport/   the library
+lib/phoenix_web_transport/   the library (quic/ default backend, cowboy/ optional)
 assets/js/                   the browser transport class
 test/                        split rule and framing tests
 demo/                        Phoenix app: side-by-side comparison (shares ../deps and ../_build)

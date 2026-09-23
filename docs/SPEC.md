@@ -1,6 +1,6 @@
 # LiveView over WebTransport: one QUIC stream per component
 
-Status: prototype working end to end in Chrome (September 2026). The library lives at the repo root, the demo app in `demo/`. This document
+Status: prototype working end to end in Chrome (September 2026) on two backends, erlang_quic (default, pure Erlang) and cowboy + msquic (optional). The library lives at the repo root, the demo app in `demo/`. This document
 is the spec for the transport, the answer to "library or patch", and the list
 of what a production version still needs.
 

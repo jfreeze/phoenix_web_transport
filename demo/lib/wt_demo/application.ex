@@ -25,11 +25,11 @@ defmodule WtDemo.Application do
     Supervisor.start_link(children, opts)
   end
 
-  # WT_BACKEND=quic swaps the cowboy+quicer session layer for erlang_quic.
+  # erlang_quic by default; WT_BACKEND=cowboy uses the cowboy+quicer backend.
   defp wt_listener do
-    case System.get_env("WT_BACKEND", "cowboy") do
-      "quic" -> PhoenixWebTransport.Quic.Listener
-      _ -> PhoenixWebTransport.Listener
+    case System.get_env("WT_BACKEND", "quic") do
+      "cowboy" -> PhoenixWebTransport.Cowboy.Listener
+      _ -> PhoenixWebTransport.Quic.Listener
     end
   end
 

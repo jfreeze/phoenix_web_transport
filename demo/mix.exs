@@ -62,7 +62,10 @@ defmodule WtDemo.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:phoenix_web_transport, path: ".."}
+      {:phoenix_web_transport, path: ".."},
+      # Optional cowboy backend (WT_BACKEND=cowboy); needs `mix deps.quic`.
+      {:cowboy, "~> 2.19"},
+      {:quicer, "~> 0.4.8"}
     ]
   end
 
@@ -74,7 +77,7 @@ defmodule WtDemo.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "deps.quic", "assets.setup", "assets.build"],
+      setup: ["deps.get", "assets.setup", "assets.build"],
       "deps.quic": ["cmd ../scripts/build_quic.sh"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind wt_demo", "esbuild wt_demo"],
