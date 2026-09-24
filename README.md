@@ -171,10 +171,21 @@ Not done:
   optional and only a second implementation of the same session protocol.
 - **Hosting**: needs a UDP path from the browser to the BEAM with a public
   cert. Cloudflare Tunnel and Cloudflare's HTTP edge do not carry
-  WebTransport. Cloudflare Spectrum (Enterprise, paid add-on) forwards raw
-  UDP and should pass QUIC through to the origin untouched, but that is
-  unverified here. A plain VPS, a port forward, or any host with a public
-  UDP port works.
+  WebTransport sessions to an origin. Cloudflare Spectrum (Enterprise, paid
+  add-on) forwards raw UDP and should pass QUIC through, unverified here. A
+  plain VPS, a port forward, or any host with a public UDP port works.
+- **A relay path that works behind Cloudflare.** Cloudflare runs
+  [MoQ relays](https://blog.cloudflare.com/moq/) on its edge (tech preview,
+  free): browsers subscribe over WebTransport, an origin publishes over an
+  outbound QUIC connection, and tracks may carry any data. That is the same
+  outbound-only shape as a tunnel. A LiveView transport on MoQ would publish
+  one track per component and subscribe to an events track from the
+  browser; the lane split and priority rule carry over as track priorities.
+  Elixir clients exist: [moqx](https://github.com/dmorn/moqx) (pure Elixir on
+  quicer, drafts 18 and Lite 05, relay-interop tested) and
+  [ex_moq](https://github.com/membraneframework/ex_moq) (Rustler bindings to
+  moq-dev). Not built; noted as the way to reach browsers without a direct
+  UDP port.
 
 ## Upstream
 
